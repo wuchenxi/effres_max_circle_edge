@@ -17,9 +17,9 @@ def effres(pc):
             y+=[pc[i]]            
     r=float(b*(n-b))
     for i in range(len(y)):
-        r+=y[i]*(1-y[i])
-        for j in range(i, len(y)):
-            r+=abs(y[i]-y[j])*(1-abs(y[i]-y[j]))*b
+        r+=y[i]*(1-y[i])*b
+        for j in range(i+1, len(y)):
+            r+=abs(y[i]-y[j])*(1-abs(y[i]-y[j]))
     return r
 
 #Move the i-th point around to maximize effective resistence
