@@ -1,0 +1,146 @@
+#usage: python3 theta_graph.py 5 50 300 out.pgm
+#5 points, 50 iterations
+#grid size 300x300
+#output file name out.pgm
+
+import scipy.linalg
+import numpy
+import sys
+from math import *
+from random import *
+import warnings
+
+warnings.filterwarnings('ignore')
+
+n=int(sys.argv[1])
+n_iter=int(sys.argv[2])
+image_sz=int(sys.argv[3])
+img_data=[[0]*image_sz for i in range(image_sz)]
+
+points_conf=[0.1]*n
+
+
+g=[2, 3, [(0,1), (0, 1), (0, 1)], []]
+
+#g=[4, 5, [(0, 1), (1, 2), (1, 3), (2, 3), (2, 3)], [2, 1, 1, 2, 2,]]
+
+
+def coord(x):
+    M=sum(g[3])+1
+    j=int(floor(x/M))
+    t=x-j*M
+    return j, t
+
+#effective resistance calculation.
+#Here because it is a specific graph we use explicit formula for it.
+def effres(x, y):
+    jx, tx=coord(x)
+    jy, ty=coord(y)
+    if jx==jy:
+        j1=(jx+1)%3
+        j2=(jx+2)%3
+        dist=abs(tx-ty)
+        cdist=g[3][jx]-dist
+        a=cdist+g[3][j1]*g[3][j2]/(g[3][j1]+g[3][j2])
+        return dist*a/(dist+a)
+    else:
+        e=g[3][3-jx-jy]
+        a=tx
+        b=g[3][jx]-a
+        c=ty
+        d=g[3][jy]-c
+        l=a+b+e
+        r=c+d+e
+        return (a*d*e+b*c*e+a*b*r+c*d*l)/(l*r-e*e)
+
+def sum_effres(pc, i, loc):
+    r=0
+    for j in range(len(pc)):
+        if j !=i:
+            r+=effres(loc, pc[j])
+    return r
+
+#Move the i-th point around to maximize effective resistence
+def optimize(pc, i):
+    M=sum(g[3])+1
+    grid=[]
+    break_pts=[[] for j in range(g[1])]
+    for j in range(len(pc)):
+        if j != i:
+            k, t=coord(pc[j])
+            if t>0 and t<g[3][k]:
+                break_pts[k]+=[pc[j]]
+    for j in range(g[1]):
+        if len(break_pts[j])==0:
+            grid+=[(j*M, j*M+g[3][j])]
+        else:
+            grid+=[(j*M, break_pts[j][0])]
+            for k in range(len(break_pts[j])-1):
+                grid+=[(break_pts[j][k], break_pts[j][k+1])]
+            grid+=[(break_pts[j][-1], j*M+g[3][j])]
+    m=len(grid)
+    rv=[]
+    pos=[]
+    for j in range(m):
+        rl=sum_effres(pc, i, grid[j][0])
+        rm=sum_effres(pc, i, (grid[j][1]+grid[j][0])/2)
+        rr=sum_effres(pc, i, grid[j][1])
+        posj=quadratic_opt(rl, rm, rr, grid[j][0], grid[j][1])
+        pos+=[posj]
+        rv+=[sum_effres(pc, i, posj)]
+    tuples=[[-rv[j], pos[j]] for j in range(m)]
+    tuples.sort()
+    pc[i]=tuples[0][1]
+    pc.sort()
+    return 0
+
+#quadratic interpolation and optimization
+def quadratic_opt(l, m, r, lx, rx):
+    slope1=m-l
+    slope2=r-m
+    slopel=(3*slope1-slope2)/2
+    sloper=(3*slope2-slope1)/2
+    if slopel*sloper>=0:
+        if slopel+sloper>0:
+            return rx
+        else:
+            return lx
+    else:
+        wr=-slopel/(sloper-slopel)
+        wl=sloper/(sloper-slopel)
+        return lx*wl+rx*wr
+
+def get_opt_effres(edge_lengths):
+    g[3]=edge_lengths
+    for i in range(n_iter):
+        id=randrange(n)
+        r=optimize(points_conf, id)
+    opt_effres=0
+    for i in range(n-1):
+        for j in range(i+1, n):
+            opt_effres+=effres(points_conf[i], points_conf[j])
+    return opt_effres
+
+max_effres=0
+min_effres=n*n*100
+
+for i in range(1, image_sz-1):
+    print(i)
+    for j in range(1, image_sz-i):
+        r=get_opt_effres([float(i)/image_sz, float(j)/image_sz, float(image_sz-i-j)/image_sz])
+        if r<min_effres:
+            min_effres=r
+        if r>max_effres:
+            max_effres=r
+        img_data[i][j]=r
+print(min_effres, max_effres)
+
+output=open(sys.argv[4], "w")
+print("P2\n"+str(image_sz)+" "+str(image_sz)+"\n255\n", file=output)
+for row in img_data:
+    nr=[255 if a==0 else int((max_effres-a)*200/(max_effres-min_effres)) for a in row]
+    print(" ".join([str(a) for a in nr]), file=output)
+    
+
+    
+
